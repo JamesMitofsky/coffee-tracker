@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { config } from "@/lib/config";
 import { SettingsSchema } from "@/types";
 
 export async function GET() {
-  return NextResponse.json(db.settings.get());
+  const { dataFile: _df, ...settings } = config.get();
+  return NextResponse.json(settings);
 }
 
 export async function PATCH(req: Request) {
@@ -12,6 +13,6 @@ export async function PATCH(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
-  const settings = db.settings.update(parsed.data);
+  const { dataFile: _df, ...settings } = config.update(parsed.data);
   return NextResponse.json(settings);
 }

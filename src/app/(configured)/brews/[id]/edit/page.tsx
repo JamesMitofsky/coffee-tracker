@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "@phosphor-icons/react/dist/ssr";
 import { db } from "@/lib/db";
+import { config } from "@/lib/config";
 import { BrewForm } from "@/components/BrewForm";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +17,7 @@ export default async function EditBrewPage({
   if (!brew) notFound();
 
   const beans = db.beans.getAll();
-  const settings = db.settings.get();
+  const settings = config.get();
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">

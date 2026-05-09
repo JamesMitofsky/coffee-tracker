@@ -1,11 +1,12 @@
 import { db } from "@/lib/db";
+import { config } from "@/lib/config";
 import { BrewForm } from "@/components/BrewForm";
 
 export const dynamic = "force-dynamic";
 
 export default function NewBrewPage() {
   const beans = db.beans.getAll();
-  const settings = db.settings.get();
+  const settings = config.get();
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">

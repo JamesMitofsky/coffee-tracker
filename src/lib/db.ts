@@ -1,80 +1,83 @@
 import fs from "fs";
-import path from "path";
-import { Brew, Bean, Settings } from "@/types";
+import { Brew, Bean } from "@/types";
+import { config } from "./config";
 
-const DATA_DIR = path.join(process.cwd(), "data");
-
-function readJSON<T>(filename: string): T {
-  const filepath = path.join(DATA_DIR, filename);
-  const raw = fs.readFileSync(filepath, "utf-8");
-  return JSON.parse(raw) as T;
+interface DataFile {
+  brews: Brew[];
+  beans: Bean[];
 }
 
-function writeJSON<T>(filename: string, data: T): void {
-  const filepath = path.join(DATA_DIR, filename);
-  fs.writeFileSync(filepath, JSON.stringify(data, null, 2));
+function getDataPath(): string {
+  const dataFile = config.get().dataFile;
+  if (!dataFile) throw new Error("No data file configured");
+  return dataFile;
+}
+
+function readData(): DataFile {
+  const p = getDataPath();
+  const raw = fs.readFileSync(p, "utf-8");
+  const parsed = JSON.parse(raw) as Partial<DataFile>;
+  return {
+    brews: parsed.brews ?? [],
+    beans: parsed.beans ?? [],
+  };
+}
+
+function writeData(data: DataFile): void {
+  fs.writeFileSync(getDataPath(), JSON.stringify(data, null, 2));
 }
 
 export const db = {
   brews: {
-    getAll: (): Brew[] => readJSON<Brew[]>("brews.json"),
+    getAll: (): Brew[] => readData().brews,
     getById: (id: string): Brew | undefined =>
-      readJSON<Brew[]>("brews.json").find((b) => b.id === id),
+      readData().brews.find((b) => b.id === id),
     create: (brew: Brew): Brew => {
-      const brews = readJSON<Brew[]>("brews.json");
-      brews.push(brew);
-      writeJSON("brews.json", brews);
+      const data = readData();
+      data.brews.push(brew);
+      writeData(data);
       return brew;
     },
     update: (id: string, updates: Partial<Brew>): Brew | null => {
-      const brews = readJSON<Brew[]>("brews.json");
-      const idx = brews.findIndex((b) => b.id === id);
+      const data = readData();
+      const idx = data.brews.findIndex((b) => b.id === id);
       if (idx === -1) return null;
-      brews[idx] = { ...brews[idx], ...updates };
-      writeJSON("brews.json", brews);
-      return brews[idx];
+      data.brews[idx] = { ...data.brews[idx], ...updates };
+      writeData(data);
+      return data.brews[idx];
     },
     delete: (id: string): boolean => {
-      const brews = readJSON<Brew[]>("brews.json");
-      const filtered = brews.filter((b) => b.id !== id);
-      if (filtered.length === brews.length) return false;
-      writeJSON("brews.json", filtered);
+      const data = readData();
+      const filtered = data.brews.filter((b) => b.id !== id);
+      if (filtered.length === data.brews.length) return false;
+      writeData({ ...data, brews: filtered });
       return true;
     },
   },
   beans: {
-    getAll: (): Bean[] => readJSON<Bean[]>("beans.json"),
+    getAll: (): Bean[] => readData().beans,
     getById: (id: string): Bean | undefined =>
-      readJSON<Bean[]>("beans.json").find((b) => b.id === id),
+      readData().beans.find((b) => b.id === id),
     create: (bean: Bean): Bean => {
-      const beans = readJSON<Bean[]>("beans.json");
-      beans.push(bean);
-      writeJSON("beans.json", beans);
+      const data = readData();
+      data.beans.push(bean);
+      writeData(data);
       return bean;
     },
     update: (id: string, updates: Partial<Bean>): Bean | null => {
-      const beans = readJSON<Bean[]>("beans.json");
-      const idx = beans.findIndex((b) => b.id === id);
+      const data = readData();
+      const idx = data.beans.findIndex((b) => b.id === id);
       if (idx === -1) return null;
-      beans[idx] = { ...beans[idx], ...updates };
-      writeJSON("beans.json", beans);
-      return beans[idx];
+      data.beans[idx] = { ...data.beans[idx], ...updates };
+      writeData(data);
+      return data.beans[idx];
     },
     delete: (id: string): boolean => {
-      const beans = readJSON<Bean[]>("beans.json");
-      const filtered = beans.filter((b) => b.id !== id);
-      if (filtered.length === beans.length) return false;
-      writeJSON("beans.json", filtered);
+      const data = readData();
+      const filtered = data.beans.filter((b) => b.id !== id);
+      if (filtered.length === data.beans.length) return false;
+      writeData({ ...data, beans: filtered });
       return true;
-    },
-  },
-  settings: {
-    get: (): Settings => readJSON<Settings>("settings.json"),
-    update: (updates: Partial<Settings>): Settings => {
-      const current = readJSON<Settings>("settings.json");
-      const updated = { ...current, ...updates };
-      writeJSON("settings.json", updated);
-      return updated;
     },
   },
 };
