@@ -3,15 +3,16 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Trash } from "@phosphor-icons/react";
+import { useData } from "@/lib/data-context";
 
 export function DeleteBrewButton({ id }: { id: string }) {
   const router = useRouter();
+  const { deleteBrew } = useData();
   const [confirm, setConfirm] = useState(false);
 
-  async function handleDelete() {
-    await fetch(`/api/brews/${id}`, { method: "DELETE" });
+  function handleDelete() {
+    deleteBrew(id);
     router.push("/");
-    router.refresh();
   }
 
   if (confirm) {

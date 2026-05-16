@@ -1,23 +1,19 @@
+"use client";
+
 import { notFound } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "@phosphor-icons/react/dist/ssr";
-import { db } from "@/lib/db";
-import { config } from "@/lib/config";
+import { ArrowLeft } from "@phosphor-icons/react";
+import { useData } from "@/lib/data-context";
 import { BrewForm } from "@/components/BrewForm";
 
-export const dynamic = "force-dynamic";
+export default function EditBrewPage() {
+  const { id } = useParams<{ id: string }>();
+  const { data } = useData();
+  if (!data) return null;
 
-export default async function EditBrewPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = await params;
-  const brew = db.brews.getById(id);
+  const brew = data.brews.find((b) => b.id === id);
   if (!brew) notFound();
-
-  const beans = db.beans.getAll();
-  const settings = config.get();
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
@@ -30,11 +26,14 @@ export default async function EditBrewPage({
       </Link>
       <h1 className="text-xl font-semibold text-stone-900 mb-6">Edit brew</h1>
       <BrewForm
-        beans={beans}
+        beans={data.beans}
+        grinders={data.grinders}
+        brewers={data.brewers}
         brewId={id}
         initial={brew}
-        defaultBrewer={settings.defaultBrewer}
-        preferredGrindSize={settings.preferredGrindSize}
+        defaultBrewer={data.settings.defaultBrewer}
+        defaultGrinder={data.settings.defaultGrinder}
+        preferredGrindSize={data.settings.preferredGrindSize}
       />
     </div>
   );

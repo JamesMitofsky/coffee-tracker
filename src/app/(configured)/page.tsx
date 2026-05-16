@@ -1,16 +1,18 @@
+"use client";
+
 import Link from "next/link";
-import { Plus } from "@phosphor-icons/react/dist/ssr";
-import { db } from "@/lib/db";
+import { Plus } from "@phosphor-icons/react";
+import { useData } from "@/lib/data-context";
 import { BrewCard } from "@/components/BrewCard";
 
-export const dynamic = "force-dynamic";
-
 export default function Home() {
-  const brews = db.brews
-    .getAll()
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  const beans = db.beans.getAll();
-  const beanMap = Object.fromEntries(beans.map((b) => [b.id, b]));
+  const { data } = useData();
+  if (!data) return null;
+
+  const brews = [...data.brews].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
+  const beanMap = Object.fromEntries(data.beans.map((b) => [b.id, b]));
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">

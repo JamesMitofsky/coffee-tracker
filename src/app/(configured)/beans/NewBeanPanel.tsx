@@ -13,12 +13,7 @@ export function NewBeanPanel() {
   return (
     <div className="border border-stone-200 rounded-lg p-5 mb-6 bg-stone-50">
       <h2 className="text-sm font-semibold text-stone-800 mb-4">New bean</h2>
-      <BeanForm
-        onSuccess={() => {
-          router.push("/beans");
-          router.refresh();
-        }}
-      />
+      <BeanForm onSuccess={() => router.push("/beans")} />
     </div>
   );
 }

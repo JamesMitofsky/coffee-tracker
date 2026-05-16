@@ -1,25 +1,26 @@
 "use client";
 
-import { useState } from "react";
-import { Settings, BREWERS } from "@/types";
-import { SearchableSelect } from "@/components/SearchableSelect";
+import { useRef, useState } from "react";
+import { Settings } from "@/types";
+import { useData } from "@/lib/data-context";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 
-export function SettingsForm({ initial }: { initial: Settings }) {
-  const [form, setForm] = useState(initial);
+export function SettingsForm() {
+  const { data, updateSettings } = useData();
+  const initialSettings = data?.settings ?? {};
+  const initialSnapshot = useRef(JSON.stringify(initialSettings));
+  const [form, setForm] = useState<Settings>(initialSettings);
+  const isDirty = JSON.stringify(form) !== initialSnapshot.current;
+  useUnsavedChanges(isDirty);
   const [saved, setSaved] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    await fetch("/api/settings", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
+    updateSettings(form);
+    initialSnapshot.current = JSON.stringify(form);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
-
-  const brewerOptions = BREWERS.map((b) => ({ value: b, label: b }));
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -43,17 +44,6 @@ export function SettingsForm({ initial }: { initial: Settings }) {
           placeholder="19"
           className="w-32 px-3 py-2 border border-stone-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-stone-400"
         />
-      </div>
-
-      <div>
-        <SearchableSelect
-          label="Default brewer"
-          options={brewerOptions}
-          value={form.defaultBrewer ?? ""}
-          onChange={(v) => setForm((f) => ({ ...f, defaultBrewer: v }))}
-          allowCustom
-        />
-        <p className="text-xs text-stone-400 mt-1">Pre-fills brewer on new brews.</p>
       </div>
 
       <button

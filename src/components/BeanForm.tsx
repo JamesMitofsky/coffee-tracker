@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BeanInput, ROAST_LEVELS } from "@/types";
+import { BeanInput, BeanSchema, ROAST_LEVELS } from "@/types";
+import { useData } from "@/lib/data-context";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 
 interface Props {
   initial?: Partial<BeanInput>;
@@ -12,46 +14,54 @@ interface Props {
 
 export function BeanForm({ initial, beanId, onSuccess }: Props) {
   const router = useRouter();
-  const [form, setForm] = useState<Partial<BeanInput>>({
+  const { addBean, updateBean } = useData();
+  const initialForm: Partial<BeanInput> = {
     name: "",
     origin: "",
     roastDate: "",
     roastLevel: undefined,
     notes: "",
     ...initial,
-  });
-  const [saving, setSaving] = useState(false);
+  };
+  const initialSnapshot = useRef(JSON.stringify(initialForm));
+  const [form, setForm] = useState<Partial<BeanInput>>(initialForm);
+  const isDirty = JSON.stringify(form) !== initialSnapshot.current;
+  const { confirmLeave } = useUnsavedChanges(!onSuccess ? isDirty : false);
+
   const [error, setError] = useState<string | null>(null);
 
   function set<K extends keyof BeanInput>(key: K, val: BeanInput[K] | undefined) {
     setForm((prev) => ({ ...prev, [key]: val }));
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSaving(true);
     setError(null);
-    try {
-      const url = beanId ? `/api/beans/${beanId}` : "/api/beans";
-      const method = beanId ? "PATCH" : "POST";
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        setError(JSON.stringify(data.error, null, 2));
+
+    if (beanId) {
+      const result = BeanSchema.partial().safeParse(form);
+      if (!result.success) {
+        setError(JSON.stringify(result.error.flatten(), null, 2));
         return;
       }
-      if (onSuccess) {
-        onSuccess();
-      } else {
-        router.push("/beans");
-        router.refresh();
+      updateBean(beanId, form);
+    } else {
+      const result = BeanSchema.safeParse({
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+        ...form,
+      });
+      if (!result.success) {
+        setError(JSON.stringify(result.error.flatten(), null, 2));
+        return;
       }
-    } finally {
-      setSaving(false);
+      addBean(result.data);
+    }
+
+    if (onSuccess) {
+      onSuccess();
+    } else {
+      router.push("/beans");
     }
   }
 
@@ -73,9 +83,7 @@ export function BeanForm({ initial, beanId, onSuccess }: Props) {
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-stone-700 mb-1">
-            Origin
-          </label>
+          <label className="block text-sm font-medium text-stone-700 mb-1">Origin</label>
           <input
             type="text"
             value={form.origin ?? ""}
@@ -85,13 +93,11 @@ export function BeanForm({ initial, beanId, onSuccess }: Props) {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-stone-700 mb-1">
-            Roast level
-          </label>
+          <label className="block text-sm font-medium text-stone-700 mb-1">Roast level</label>
           <select
             value={form.roastLevel ?? ""}
             onChange={(e) =>
-              set("roastLevel", e.target.value as typeof ROAST_LEVELS[number] || undefined)
+              set("roastLevel", (e.target.value as typeof ROAST_LEVELS[number]) || undefined)
             }
             className="w-full px-3 py-2 border border-stone-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-stone-400 bg-white"
           >
@@ -106,9 +112,7 @@ export function BeanForm({ initial, beanId, onSuccess }: Props) {
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-stone-700 mb-1">
-          Roast date
-        </label>
+        <label className="block text-sm font-medium text-stone-700 mb-1">Roast date</label>
         <input
           type="date"
           value={form.roastDate ?? ""}
@@ -118,9 +122,7 @@ export function BeanForm({ initial, beanId, onSuccess }: Props) {
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-stone-700 mb-1">
-          Notes
-        </label>
+        <label className="block text-sm font-medium text-stone-700 mb-1">Notes</label>
         <textarea
           value={form.notes ?? ""}
           onChange={(e) => set("notes", e.target.value)}
@@ -139,15 +141,14 @@ export function BeanForm({ initial, beanId, onSuccess }: Props) {
       <div className="flex gap-3">
         <button
           type="submit"
-          disabled={saving}
-          className="flex-1 py-2 bg-stone-800 text-white rounded-md text-sm font-medium hover:bg-stone-700 disabled:opacity-50 transition-colors"
+          className="flex-1 py-2 bg-stone-800 text-white rounded-md text-sm font-medium hover:bg-stone-700 transition-colors"
         >
-          {saving ? "Saving…" : beanId ? "Update bean" : "Add bean"}
+          {beanId ? "Update bean" : "Add bean"}
         </button>
         {!onSuccess && (
           <button
             type="button"
-            onClick={() => router.back()}
+            onClick={() => confirmLeave() && router.back()}
             className="px-4 py-2 border border-stone-200 text-stone-600 rounded-md text-sm hover:bg-stone-50 transition-colors"
           >
             Cancel

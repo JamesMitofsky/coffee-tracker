@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
 import { Nav } from "@/components/Nav";
+import { DataProvider } from "@/lib/data-context";
 
 const geist = Geist({ subsets: ["latin"] });
 
@@ -18,8 +19,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${geist.className} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-white text-stone-900">
-        <Nav />
-        <main className="flex-1">{children}</main>
+        <DataProvider>
+          <Nav />
+          <main className="flex-1">{children}</main>
+        </DataProvider>
       </body>
     </html>
   );

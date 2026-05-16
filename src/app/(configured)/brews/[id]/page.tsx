@@ -1,23 +1,22 @@
+"use client";
+
 import { notFound } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, PencilSimple, Trash } from "@phosphor-icons/react/dist/ssr";
-import { db } from "@/lib/db";
+import { ArrowLeft, PencilSimple, CopySimple, Star } from "@phosphor-icons/react";
 import { differenceInDays, parseISO } from "date-fns";
-import { Star } from "@phosphor-icons/react/dist/ssr";
+import { useData } from "@/lib/data-context";
 import { DeleteBrewButton } from "./DeleteBrewButton";
 
-export const dynamic = "force-dynamic";
+export default function BrewPage() {
+  const { id } = useParams<{ id: string }>();
+  const { data } = useData();
+  if (!data) return null;
 
-export default async function BrewPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = await params;
-  const brew = db.brews.getById(id);
+  const brew = data.brews.find((b) => b.id === id);
   if (!brew) notFound();
 
-  const bean = db.beans.getById(brew.beanId);
+  const bean = data.beans.find((b) => b.id === brew.beanId);
   const beansG = Math.round(brew.waterG / brew.brewRatio);
 
   const daysSinceRoast =
@@ -26,8 +25,9 @@ export default async function BrewPage({
       : null;
 
   const rows: [string, string][] = [
-    ["Date", new Date(brew.date).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })],
+    ["Date", new Date(`${brew.date}T00:00:00`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })],
     ["Brewer", brew.brewer],
+    ...(brew.grinder ? [["Grinder", brew.grinder] as [string, string]] : []),
     ["Bean", bean?.name ?? brew.beanId],
     ...(daysSinceRoast !== null ? [["Days from roast", `${daysSinceRoast}d`] as [string, string]] : []),
     ["Water", `${brew.waterG} g`],
@@ -49,6 +49,13 @@ export default async function BrewPage({
           Back
         </Link>
         <div className="flex gap-2">
+          <Link
+            href={`/brews/new?from=${id}`}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-stone-200 rounded-md text-sm text-stone-600 hover:bg-stone-50"
+          >
+            <CopySimple size={14} />
+            Use as template
+          </Link>
           <Link
             href={`/brews/${id}/edit`}
             className="flex items-center gap-1.5 px-3 py-1.5 border border-stone-200 rounded-md text-sm text-stone-600 hover:bg-stone-50"
@@ -95,10 +102,7 @@ export default async function BrewPage({
           <p className="text-sm font-medium text-stone-700 mb-2">Taste</p>
           <div className="flex flex-wrap gap-2">
             {brew.tasteTags.map((tag) => (
-              <span
-                key={tag}
-                className="px-3 py-1 bg-stone-100 text-stone-700 rounded-full text-sm"
-              >
+              <span key={tag} className="px-3 py-1 bg-stone-100 text-stone-700 rounded-full text-sm">
                 {tag}
               </span>
             ))}
@@ -107,11 +111,16 @@ export default async function BrewPage({
       )}
 
       {brew.notes && (
+        <div className="mb-6">
+          <p className="text-sm font-medium text-stone-700 mb-2">Brewing details</p>
+          <p className="text-sm text-stone-600 whitespace-pre-wrap leading-relaxed">{brew.notes}</p>
+        </div>
+      )}
+
+      {brew.vibes && (
         <div>
-          <p className="text-sm font-medium text-stone-700 mb-2">Notes</p>
-          <p className="text-sm text-stone-600 whitespace-pre-wrap leading-relaxed">
-            {brew.notes}
-          </p>
+          <p className="text-sm font-medium text-stone-700 mb-2">Vibes &amp; feedback</p>
+          <p className="text-sm text-stone-600 whitespace-pre-wrap leading-relaxed">{brew.vibes}</p>
         </div>
       )}
     </div>

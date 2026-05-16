@@ -1,10 +1,10 @@
-import { db } from "@/lib/db";
+"use client";
+
+import { useData } from "@/lib/data-context";
 import { InsightsClient } from "./InsightsClient";
 
-export const dynamic = "force-dynamic";
-
 export default function InsightsPage() {
-  const brews = db.brews.getAll();
-  const beans = db.beans.getAll();
-  return <InsightsClient brews={brews} beans={beans} />;
+  const { data } = useData();
+  if (!data) return null;
+  return <InsightsClient brews={data.brews} beans={data.beans} />;
 }

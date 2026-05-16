@@ -1,19 +1,21 @@
+"use client";
+
 import Link from "next/link";
-import { Plus, Leaf } from "@phosphor-icons/react/dist/ssr";
+import { Plus, Leaf } from "@phosphor-icons/react";
 import { Suspense } from "react";
-import { db } from "@/lib/db";
+import { useData } from "@/lib/data-context";
 import { BeanCard } from "./BeanCard";
 import { NewBeanPanel } from "./NewBeanPanel";
 
-export const dynamic = "force-dynamic";
-
 export default function BeansPage() {
-  const beans = db.beans
-    .getAll()
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  const brews = db.brews.getAll();
+  const { data } = useData();
+  if (!data) return null;
 
-  const brewCountByBean = brews.reduce<Record<string, number>>((acc, brew) => {
+  const beans = [...data.beans].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+
+  const brewCountByBean = data.brews.reduce<Record<string, number>>((acc, brew) => {
     acc[brew.beanId] = (acc[brew.beanId] ?? 0) + 1;
     return acc;
   }, {});
