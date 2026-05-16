@@ -10,9 +10,16 @@ export default function Home() {
   if (!data) return null;
 
   const brews = [...data.brews].sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    (a, b) => new Date(b.brewingInfo.date).getTime() - new Date(a.brewingInfo.date).getTime()
   );
   const beanMap = Object.fromEntries(data.beans.map((b) => [b.id, b]));
+  const brewerMap = Object.fromEntries(data.brewers.map((b) => [b.id, b.method ?? b.shortName ?? b.name]));
+  const grinderMap = Object.fromEntries(
+    data.grinders.map((g) => [g.id, g.shortName ?? g.name])
+  );
+  const grinderSubunitsMap = Object.fromEntries(
+    data.grinders.map((g) => [g.id, g.subunitsPerUnit])
+  );
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
@@ -45,7 +52,14 @@ export default function Home() {
       ) : (
         <div className="space-y-3">
           {brews.map((brew) => (
-            <BrewCard key={brew.id} brew={brew} bean={beanMap[brew.beanId]} />
+            <BrewCard
+              key={brew.id}
+              brew={brew}
+              bean={beanMap[brew.brewingInfo.beanId]}
+              brewerName={brewerMap[brew.brewingInfo.brewerId] ?? brew.brewingInfo.brewerId}
+              grinderName={brew.brewingInfo.grinderId ? grinderMap[brew.brewingInfo.grinderId] : undefined}
+              subunitsPerUnit={brew.brewingInfo.grinderId ? grinderSubunitsMap[brew.brewingInfo.grinderId] : undefined}
+            />
           ))}
         </div>
       )}

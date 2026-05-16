@@ -1,30 +1,33 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FolderOpen, FilePlus } from "@phosphor-icons/react";
 import { useData } from "@/lib/data-context";
 
 export function SetupClient() {
   const router = useRouter();
-  const { loadFromFile, startFresh } = useData();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { openFile, createFile } = useData();
   const [error, setError] = useState<string | null>(null);
 
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  async function handleOpen() {
     try {
-      await loadFromFile(file);
+      await openFile();
       router.push("/");
-    } catch {
-      setError("Invalid JSON file. Make sure it's a valid coffee tracker data file.");
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
+      setError(err instanceof Error ? err.message : "Invalid JSON file.");
     }
   }
 
-  function handleStartFresh() {
-    startFresh();
-    router.push("/");
+  async function handleCreate() {
+    try {
+      await createFile();
+      router.push("/");
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
+      setError("Could not create file.");
+    }
   }
 
   return (
@@ -39,18 +42,18 @@ export function SetupClient() {
 
         <div className="grid grid-cols-2 gap-4">
           <button
-            onClick={handleStartFresh}
+            onClick={handleCreate}
             className="flex flex-col items-center gap-3 p-6 border-2 border-stone-200 rounded-xl hover:border-stone-400 hover:bg-white transition-colors text-center"
           >
             <FilePlus size={32} className="text-stone-500" />
             <div>
               <p className="font-medium text-stone-800 text-sm">Start fresh</p>
-              <p className="text-xs text-stone-400 mt-0.5">Empty data set</p>
+              <p className="text-xs text-stone-400 mt-0.5">New JSON file</p>
             </div>
           </button>
 
           <button
-            onClick={() => fileInputRef.current?.click()}
+            onClick={handleOpen}
             className="flex flex-col items-center gap-3 p-6 border-2 border-stone-200 rounded-xl hover:border-stone-400 hover:bg-white transition-colors text-center"
           >
             <FolderOpen size={32} className="text-stone-500" />
@@ -61,22 +64,14 @@ export function SetupClient() {
           </button>
         </div>
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".json,application/json"
-          onChange={handleFile}
-          className="hidden"
-        />
-
         {error && (
-          <p className="mt-4 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+          <p className="mt-4 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2 whitespace-pre-wrap font-mono">
             {error}
           </p>
         )}
 
         <p className="mt-6 text-xs text-stone-400 text-center">
-          Data stays on your device. Export any time from settings.
+          All changes save automatically to your file.
         </p>
       </div>
     </div>

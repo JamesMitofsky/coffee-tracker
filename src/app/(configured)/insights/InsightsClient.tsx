@@ -1,21 +1,25 @@
 "use client";
 
-import { Brew, Bean, TASTE_TAGS, TasteTag } from "@/types";
+import { Brew, Bean, Grinder, TASTE_TAGS, TasteTag } from "@/types";
+import { normalizeGrindSize, formatGrindSize } from "@/lib/grind-size";
 
 interface Props {
   brews: Brew[];
   beans: Bean[];
+  grinders: Grinder[];
 }
 
 interface GrindStat {
-  grindSize: number;
+  normalizedSize: number;
+  displayLabel: string;
   avgQuality: number;
   count: number;
 }
 
-export function InsightsClient({ brews, beans }: Props) {
+export function InsightsClient({ brews, beans, grinders }: Props) {
   const beanMap = Object.fromEntries(beans.map((b) => [b.id, b]));
-  const ratedBrews = brews.filter((b) => b.quality !== undefined);
+  const grinderMap = Object.fromEntries(grinders.map((g) => [g.id, g]));
+  const ratedBrews = brews.filter((b) => b.postBrewEvaluation.quality !== undefined);
 
   if (brews.length < 3) {
     return (
@@ -28,25 +32,27 @@ export function InsightsClient({ brews, beans }: Props) {
     );
   }
 
-  // Grind size vs quality (all rated brews)
-  const grindGroups = ratedBrews.reduce<Record<number, number[]>>((acc, b) => {
-    const key = b.grindSize;
-    acc[key] = [...(acc[key] ?? []), b.quality!];
+  const grindGroups = ratedBrews.reduce<Record<number, { qualities: number[]; displayLabel: string }>>((acc, b) => {
+    const grinder = b.brewingInfo.grinderId ? grinderMap[b.brewingInfo.grinderId] : undefined;
+    const key = normalizeGrindSize(b.brewingInfo.grindSize, grinder?.subunitsPerUnit);
+    const label = formatGrindSize(b.brewingInfo.grindSize, grinder?.subunitsPerUnit);
+    if (!acc[key]) acc[key] = { qualities: [], displayLabel: label };
+    acc[key].qualities.push(b.postBrewEvaluation.quality!);
     return acc;
   }, {});
 
   const grindStats: GrindStat[] = Object.entries(grindGroups)
-    .map(([grind, qualities]) => ({
-      grindSize: parseFloat(grind),
+    .map(([key, { qualities, displayLabel }]) => ({
+      normalizedSize: parseFloat(key),
+      displayLabel,
       avgQuality: qualities.reduce((a, b) => a + b, 0) / qualities.length,
       count: qualities.length,
     }))
-    .sort((a, b) => a.grindSize - b.grindSize);
+    .sort((a, b) => a.normalizedSize - b.normalizedSize);
 
-  // Quality by bean
   const beanQuality = Object.entries(
     ratedBrews.reduce<Record<string, number[]>>((acc, b) => {
-      acc[b.beanId] = [...(acc[b.beanId] ?? []), b.quality!];
+      acc[b.brewingInfo.beanId] = [...(acc[b.brewingInfo.beanId] ?? []), b.postBrewEvaluation.quality!];
       return acc;
     }, {})
   )
@@ -58,10 +64,9 @@ export function InsightsClient({ brews, beans }: Props) {
     }))
     .sort((a, b) => b.avg - a.avg);
 
-  // Taste tag frequency
   const tagCounts = brews.reduce<Record<TasteTag, number>>(
     (acc, b) => {
-      b.tasteTags.forEach((t) => (acc[t] = (acc[t] ?? 0) + 1));
+      b.postBrewEvaluation.tasteTags.forEach((t) => (acc[t] = (acc[t] ?? 0) + 1));
       return acc;
     },
     {} as Record<TasteTag, number>
@@ -71,7 +76,6 @@ export function InsightsClient({ brews, beans }: Props) {
     <div className="max-w-2xl mx-auto px-4 py-8 space-y-10">
       <h1 className="text-xl font-semibold text-stone-900">Insights</h1>
 
-      {/* Grind size vs quality */}
       {grindStats.length > 0 && (
         <section>
           <h2 className="text-sm font-semibold text-stone-700 mb-3">
@@ -79,9 +83,9 @@ export function InsightsClient({ brews, beans }: Props) {
           </h2>
           <div className="space-y-2">
             {grindStats.map((s) => (
-              <div key={s.grindSize} className="flex items-center gap-3">
+              <div key={s.normalizedSize} className="flex items-center gap-3">
                 <span className="w-8 text-xs text-stone-500 text-right shrink-0">
-                  {s.grindSize}
+                  {s.displayLabel}
                 </span>
                 <div className="flex-1 bg-stone-100 rounded-full h-2 overflow-hidden">
                   <div
@@ -98,7 +102,6 @@ export function InsightsClient({ brews, beans }: Props) {
         </section>
       )}
 
-      {/* Bean quality ranking */}
       {beanQuality.length > 0 && (
         <section>
           <h2 className="text-sm font-semibold text-stone-700 mb-3">
@@ -125,7 +128,6 @@ export function InsightsClient({ brews, beans }: Props) {
         </section>
       )}
 
-      {/* Taste tag frequency */}
       {Object.keys(tagCounts).length > 0 && (
         <section>
           <h2 className="text-sm font-semibold text-stone-700 mb-3">
@@ -147,7 +149,6 @@ export function InsightsClient({ brews, beans }: Props) {
         </section>
       )}
 
-      {/* Recent streak */}
       <section>
         <h2 className="text-sm font-semibold text-stone-700 mb-1">Overview</h2>
         <dl className="grid grid-cols-3 gap-4 mt-3">
@@ -158,7 +159,7 @@ export function InsightsClient({ brews, beans }: Props) {
               "Avg quality",
               ratedBrews.length > 0
                 ? (
-                    ratedBrews.reduce((a, b) => a + b.quality!, 0) /
+                    ratedBrews.reduce((a, b) => a + b.postBrewEvaluation.quality!, 0) /
                     ratedBrews.length
                   ).toFixed(1)
                 : "—",

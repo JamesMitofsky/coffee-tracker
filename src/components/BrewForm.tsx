@@ -1,83 +1,144 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { BrewInput, Bean, TasteTag, BrewSchema } from "@/types";
+import { BrewingInfo, PostBrewEvaluation, TasteTag, BrewSchema, BrewInputSchema, Grinder, Brewer, GrindSizeEntry, GrindSize } from "@/types";
+import { Bean } from "@/types";
 import { SearchableSelect } from "./SearchableSelect";
 import { QualityPicker } from "./QualityPicker";
 import { TasteTagPicker } from "./TasteTagPicker";
+import { SweetnessSlider } from "./SweetnessSlider";
 import { BrewTimer } from "./BrewTimer";
 import { Thermometer, Timer, Drop, ArrowsHorizontal, Barbell } from "@phosphor-icons/react";
+import { GrindSizeInput } from "./GrindSizeInput";
 import { useData } from "@/lib/data-context";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 
 interface Props {
   beans: Bean[];
-  grinders: string[];
-  brewers: string[];
-  initial?: Partial<BrewInput>;
+  grinders: Grinder[];
+  brewers: Brewer[];
+  grindSizeMatrix: GrindSizeEntry[];
+  initial?: {
+    brewingInfo?: Partial<BrewingInfo>;
+    postBrewEvaluation?: Partial<PostBrewEvaluation>;
+  };
   brewId?: string;
   defaultBrewer?: string;
   defaultGrinder?: string;
-  preferredGrindSize?: number;
 }
 
-export function BrewForm({ beans, grinders, brewers, initial, brewId, defaultBrewer, defaultGrinder, preferredGrindSize }: Props) {
+export function BrewForm({ beans, grinders, brewers, grindSizeMatrix, initial, brewId, defaultBrewer, defaultGrinder }: Props) {
   const router = useRouter();
   const { addBrew, updateBrew } = useData();
   const d = new Date();
   const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-  const initialForm: Partial<BrewInput> = {
-    date: today,
-    brewer: defaultBrewer ?? "French Press",
-    grinder: defaultGrinder,
-    waterG: undefined,
-    brewRatio: 15,
-    grindSize: preferredGrindSize,
-    brewTimeMins: undefined,
-    waterTempC: undefined,
-    quality: undefined,
-    tasteTags: [],
-    notes: "",
-    vibes: "",
-    ...initial,
-  };
-  const initialSnapshot = useRef(JSON.stringify(initialForm));
-  const [form, setForm] = useState<Partial<BrewInput>>(initialForm);
-  const isDirty = JSON.stringify(form) !== initialSnapshot.current;
-  const { confirmLeave } = useUnsavedChanges(isDirty);
-
-  const [error, setError] = useState<string | null>(null);
-
-  const beansG =
-    form.waterG && form.brewRatio ? Math.round(form.waterG / form.brewRatio) : null;
-
-  function set<K extends keyof BrewInput>(key: K, val: BrewInput[K] | undefined) {
-    setForm((prev) => ({ ...prev, [key]: val }));
+  function lookupGrindSize(grinderId: string | undefined, brewerId: string | undefined): GrindSize | undefined {
+    if (!grinderId || !brewerId) return undefined;
+    return grindSizeMatrix.find((e) => e.grinderId === grinderId && e.brewerId === brewerId)?.grindSize;
   }
 
-  function numInput(key: keyof BrewInput, val: string) {
+  const defaultBrewingInfo: Partial<BrewingInfo> = {
+    date: today,
+    brewerId: defaultBrewer ?? "",
+    grinderId: defaultGrinder,
+    waterG: undefined,
+    brewRatio: 15,
+    grindSize: lookupGrindSize(defaultGrinder, defaultBrewer),
+    brewTimeMins: undefined,
+    waterTempC: undefined,
+    notes: "",
+    ...initial?.brewingInfo,
+  };
+
+  const defaultPostEval: Partial<PostBrewEvaluation> = {
+    quality: undefined,
+    tasteTags: [],
+    vibes: "",
+    sweetnessLevel: undefined,
+    ...initial?.postBrewEvaluation,
+  };
+
+  const initialSnapshot = useRef(JSON.stringify({ brewingInfo: defaultBrewingInfo, postBrewEvaluation: defaultPostEval }));
+  const [brewInfo, setBrewInfo] = useState<Partial<BrewingInfo>>(defaultBrewingInfo);
+  const [postEval, setPostEval] = useState<Partial<PostBrewEvaluation>>(defaultPostEval);
+  const isDirty = JSON.stringify({ brewingInfo: brewInfo, postBrewEvaluation: postEval }) !== initialSnapshot.current;
+  const { confirmLeave } = useUnsavedChanges(brewId ? false : isDirty);
+
+  const [error, setError] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+
+  const autosaveSkip = useRef(true);
+  useEffect(() => {
+    if (!brewId) return;
+    if (autosaveSkip.current) {
+      autosaveSkip.current = false;
+      return;
+    }
+    setSaveStatus("saving");
+    const timer = setTimeout(() => {
+      const payload = { brewingInfo: brewInfo, postBrewEvaluation: postEval };
+      const result = BrewInputSchema.safeParse(payload);
+      if (!result.success) {
+        setSaveStatus("error");
+        setError(JSON.stringify(result.error.flatten(), null, 2));
+        return;
+      }
+      updateBrew(brewId, result.data);
+      setSaveStatus("saved");
+    }, 800);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brewInfo, postEval]);
+
+  const hasMounted = useRef(false);
+  useEffect(() => {
+    if (!hasMounted.current) {
+      hasMounted.current = true;
+      return;
+    }
+    const size = lookupGrindSize(brewInfo.grinderId, brewInfo.brewerId);
+    if (size !== undefined) {
+      setBrewField("grindSize", size);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brewInfo.grinderId, brewInfo.brewerId]);
+
+  const beansG =
+    brewInfo.waterG && brewInfo.brewRatio ? Math.round(brewInfo.waterG / brewInfo.brewRatio) : null;
+
+  function setBrewField<K extends keyof BrewingInfo>(key: K, val: BrewingInfo[K] | undefined) {
+    setBrewInfo((prev) => ({ ...prev, [key]: val }));
+  }
+
+  function setEvalField<K extends keyof PostBrewEvaluation>(key: K, val: PostBrewEvaluation[K] | undefined) {
+    setPostEval((prev) => ({ ...prev, [key]: val }));
+  }
+
+  function numBrewInput(key: keyof BrewingInfo, val: string) {
     const n = val === "" ? undefined : parseFloat(val);
-    set(key, n as never);
+    setBrewField(key, n as never);
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
+    const payload = { brewingInfo: brewInfo, postBrewEvaluation: postEval };
+
     if (brewId) {
-      const result = BrewSchema.partial().safeParse(form);
+      const result = BrewInputSchema.safeParse(payload);
       if (!result.success) {
         setError(JSON.stringify(result.error.flatten(), null, 2));
         return;
       }
-      updateBrew(brewId, form);
+      updateBrew(brewId, result.data);
     } else {
       const result = BrewSchema.safeParse({
         id: crypto.randomUUID(),
         createdAt: new Date().toISOString(),
-        ...form,
+        ...payload,
       });
       if (!result.success) {
         setError(JSON.stringify(result.error.flatten(), null, 2));
@@ -90,8 +151,8 @@ export function BrewForm({ beans, grinders, brewers, initial, brewId, defaultBre
   }
 
   const beanOptions = beans.map((b) => ({ value: b.id, label: b.name }));
-  const brewerOptions = brewers.map((b) => ({ value: b, label: b }));
-  const grinderOptions = grinders.map((g) => ({ value: g, label: g }));
+  const brewerOptions = brewers.map((b) => ({ value: b.id, label: b.name }));
+  const grinderOptions = grinders.map((g) => ({ value: g.id, label: g.name }));
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -102,8 +163,8 @@ export function BrewForm({ beans, grinders, brewers, initial, brewId, defaultBre
           </label>
           <input
             type="date"
-            value={form.date ?? ""}
-            onChange={(e) => set("date", e.target.value)}
+            value={brewInfo.date ?? ""}
+            onChange={(e) => setBrewField("date", e.target.value)}
             required
             className="w-full px-3 py-2 border border-stone-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-stone-400"
           />
@@ -112,8 +173,8 @@ export function BrewForm({ beans, grinders, brewers, initial, brewId, defaultBre
           label="Brewer"
           required
           options={brewerOptions}
-          value={form.brewer ?? ""}
-          onChange={(v) => set("brewer", v)}
+          value={brewInfo.brewerId ?? ""}
+          onChange={(v) => setBrewField("brewerId", v)}
           allowCustom
         />
       </div>
@@ -121,8 +182,8 @@ export function BrewForm({ beans, grinders, brewers, initial, brewId, defaultBre
       <SearchableSelect
         label="Grinder"
         options={grinderOptions}
-        value={form.grinder ?? ""}
-        onChange={(v) => set("grinder", v)}
+        value={brewInfo.grinderId ?? ""}
+        onChange={(v) => setBrewField("grinderId", v)}
         allowCustom
         placeholder="Select grinder…"
       />
@@ -133,8 +194,8 @@ export function BrewForm({ beans, grinders, brewers, initial, brewId, defaultBre
             label="Bean"
             required
             options={beanOptions}
-            value={form.beanId ?? ""}
-            onChange={(v) => set("beanId", v)}
+            value={brewInfo.beanId ?? ""}
+            onChange={(v) => setBrewField("beanId", v)}
             placeholder="Select bean…"
           />
         </div>
@@ -153,8 +214,8 @@ export function BrewForm({ beans, grinders, brewers, initial, brewId, defaultBre
           </label>
           <input
             type="number"
-            value={form.waterG ?? ""}
-            onChange={(e) => numInput("waterG", e.target.value)}
+            value={brewInfo.waterG ?? ""}
+            onChange={(e) => numBrewInput("waterG", e.target.value)}
             placeholder="800"
             required
             className="w-full px-3 py-2 border border-stone-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-stone-400"
@@ -166,8 +227,8 @@ export function BrewForm({ beans, grinders, brewers, initial, brewId, defaultBre
           </label>
           <input
             type="number"
-            value={form.brewRatio ?? ""}
-            onChange={(e) => numInput("brewRatio", e.target.value)}
+            value={brewInfo.brewRatio ?? ""}
+            onChange={(e) => numBrewInput("brewRatio", e.target.value)}
             placeholder="15"
             step="0.5"
             required
@@ -189,14 +250,11 @@ export function BrewForm({ beans, grinders, brewers, initial, brewId, defaultBre
           <label className="block text-sm font-medium text-stone-700 mb-1 flex items-center gap-1">
             <Barbell size={14} /> Grind size <span className="text-stone-400">*</span>
           </label>
-          <input
-            type="number"
-            value={form.grindSize ?? ""}
-            onChange={(e) => numInput("grindSize", e.target.value)}
-            placeholder={String(preferredGrindSize ?? 19)}
-            step="0.5"
+          <GrindSizeInput
+            value={brewInfo.grindSize}
+            onChange={(v) => setBrewField("grindSize", v)}
+            subunitsPerUnit={grinders.find((g) => g.id === brewInfo.grinderId)?.subunitsPerUnit}
             required
-            className="w-full px-3 py-2 border border-stone-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-stone-400"
           />
         </div>
         <div>
@@ -205,16 +263,16 @@ export function BrewForm({ beans, grinders, brewers, initial, brewId, defaultBre
           </label>
           <input
             type="number"
-            value={form.brewTimeMins ?? ""}
-            onChange={(e) => numInput("brewTimeMins", e.target.value)}
+            value={brewInfo.brewTimeMins ?? ""}
+            onChange={(e) => numBrewInput("brewTimeMins", e.target.value)}
             placeholder="3"
             step="0.5"
             required
             className="w-full px-3 py-2 border border-stone-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-stone-400 mb-1.5"
           />
           <BrewTimer
-            valueMins={form.brewTimeMins}
-            onChange={(mins) => set("brewTimeMins", mins)}
+            valueMins={brewInfo.brewTimeMins}
+            onChange={(mins) => setBrewField("brewTimeMins", mins)}
           />
         </div>
         <div>
@@ -223,46 +281,52 @@ export function BrewForm({ beans, grinders, brewers, initial, brewId, defaultBre
           </label>
           <input
             type="number"
-            value={form.waterTempC ?? ""}
-            onChange={(e) => numInput("waterTempC", e.target.value)}
+            value={brewInfo.waterTempC ?? ""}
+            onChange={(e) => numBrewInput("waterTempC", e.target.value)}
             placeholder="94"
             className="w-full px-3 py-2 border border-stone-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-stone-400"
           />
         </div>
       </div>
 
-      <QualityPicker
-        label="Quality"
-        value={form.quality}
-        onChange={(v) => set("quality", v)}
-      />
-
-      <TasteTagPicker
-        label="Taste"
-        value={(form.tasteTags as TasteTag[]) ?? []}
-        onChange={(tags) => set("tasteTags", tags)}
-      />
-
       <div>
         <label className="block text-sm font-medium text-stone-700 mb-1">
           Brewing details
         </label>
         <textarea
-          value={form.notes ?? ""}
-          onChange={(e) => set("notes", e.target.value)}
+          value={brewInfo.notes ?? ""}
+          onChange={(e) => setBrewField("notes", e.target.value)}
           rows={3}
           placeholder="Bloom 45s, scooped crust at 2min…"
           className="w-full px-3 py-2 border border-stone-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-stone-400 resize-none"
         />
       </div>
 
+      <QualityPicker
+        label="Quality"
+        value={postEval.quality}
+        onChange={(v) => setEvalField("quality", v)}
+      />
+
+      <TasteTagPicker
+        label="Taste tags"
+        value={(postEval.tasteTags as TasteTag[]) ?? []}
+        onChange={(tags) => setEvalField("tasteTags", tags)}
+      />
+
+      <SweetnessSlider
+        label="Sweetness"
+        value={postEval.sweetnessLevel}
+        onChange={(v) => setEvalField("sweetnessLevel", v)}
+      />
+
       <div>
         <label className="block text-sm font-medium text-stone-700 mb-1">
           Vibes &amp; feedback
         </label>
         <textarea
-          value={form.vibes ?? ""}
-          onChange={(e) => set("vibes", e.target.value)}
+          value={postEval.vibes ?? ""}
+          onChange={(e) => setEvalField("vibes", e.target.value)}
           rows={2}
           placeholder="Tasted a bit hollow mid-palate, bright finish…"
           className="w-full px-3 py-2 border border-stone-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-stone-400 resize-none"
@@ -275,20 +339,39 @@ export function BrewForm({ beans, grinders, brewers, initial, brewId, defaultBre
         </pre>
       )}
 
-      <div className="flex gap-3">
-        <button
-          type="submit"
-          className="flex-1 py-2 bg-stone-800 text-white rounded-md text-sm font-medium hover:bg-stone-700 transition-colors"
-        >
-          {brewId ? "Update brew" : "Log brew"}
-        </button>
-        <button
-          type="button"
-          onClick={() => confirmLeave() && router.back()}
-          className="px-4 py-2 border border-stone-200 text-stone-600 rounded-md text-sm hover:bg-stone-50 transition-colors"
-        >
-          Cancel
-        </button>
+      <div className="flex gap-3 items-center">
+        {brewId ? (
+          <>
+            <span className={`text-xs ${saveStatus === "error" ? "text-red-500" : "text-stone-400"}`}>
+              {saveStatus === "saving" && "Saving…"}
+              {saveStatus === "saved" && "Saved"}
+              {saveStatus === "error" && "Save failed"}
+            </span>
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="ml-auto px-4 py-2 border border-stone-200 text-stone-600 rounded-md text-sm hover:bg-stone-50 transition-colors"
+            >
+              Back
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="submit"
+              className="flex-1 py-2 bg-stone-800 text-white rounded-md text-sm font-medium hover:bg-stone-700 transition-colors"
+            >
+              Log brew
+            </button>
+            <button
+              type="button"
+              onClick={() => confirmLeave() && router.back()}
+              className="px-4 py-2 border border-stone-200 text-stone-600 rounded-md text-sm hover:bg-stone-50 transition-colors"
+            >
+              Cancel
+            </button>
+          </>
+        )}
       </div>
     </form>
   );

@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useData } from "@/lib/data-context";
 import { BrewForm } from "@/components/BrewForm";
-import { BrewInput } from "@/types";
+import { BrewingInfo } from "@/types";
 
 function NewBrewContent() {
   const searchParams = useSearchParams();
@@ -12,19 +12,28 @@ function NewBrewContent() {
   if (!data) return null;
 
   const from = searchParams.get("from");
-  let initial: Partial<BrewInput> | undefined;
+  let initial: { brewingInfo?: Partial<BrewingInfo> } | undefined;
   if (from) {
     const template = data.brews.find((b) => b.id === from);
     if (template) {
+      const { brewingInfo } = template;
+      const templateDate = new Date(`${brewingInfo.date}T00:00:00`).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
       initial = {
-        beanId: template.beanId,
-        brewer: template.brewer,
-        grinder: template.grinder,
-        waterG: template.waterG,
-        brewRatio: template.brewRatio,
-        grindSize: template.grindSize,
-        brewTimeMins: template.brewTimeMins,
-        waterTempC: template.waterTempC,
+        brewingInfo: {
+          beanId: brewingInfo.beanId,
+          brewerId: brewingInfo.brewerId,
+          grinderId: brewingInfo.grinderId,
+          waterG: brewingInfo.waterG,
+          brewRatio: brewingInfo.brewRatio,
+          grindSize: brewingInfo.grindSize,
+          brewTimeMins: brewingInfo.brewTimeMins,
+          waterTempC: brewingInfo.waterTempC,
+          notes: `Template from ${templateDate} brew`,
+        },
       };
     }
   }
@@ -38,9 +47,9 @@ function NewBrewContent() {
         beans={data.beans}
         grinders={data.grinders}
         brewers={data.brewers}
+        grindSizeMatrix={data.settings.grindSizeMatrix}
         defaultBrewer={data.settings.defaultBrewer}
         defaultGrinder={data.settings.defaultGrinder}
-        preferredGrindSize={data.settings.preferredGrindSize}
         initial={initial}
       />
     </div>

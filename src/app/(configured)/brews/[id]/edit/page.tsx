@@ -29,11 +29,14 @@ export default function EditBrewPage() {
         beans={data.beans}
         grinders={data.grinders}
         brewers={data.brewers}
+        grindSizeMatrix={data.settings.grindSizeMatrix}
         brewId={id}
-        initial={brew}
+        initial={{
+          brewingInfo: brew.brewingInfo,
+          postBrewEvaluation: brew.postBrewEvaluation,
+        }}
         defaultBrewer={data.settings.defaultBrewer}
         defaultGrinder={data.settings.defaultGrinder}
-        preferredGrindSize={data.settings.preferredGrindSize}
       />
     </div>
   );

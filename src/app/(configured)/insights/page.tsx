@@ -6,5 +6,5 @@ import { InsightsClient } from "./InsightsClient";
 export default function InsightsPage() {
   const { data } = useData();
   if (!data) return null;
-  return <InsightsClient brews={data.brews} beans={data.beans} />;
+  return <InsightsClient brews={data.brews} beans={data.beans} grinders={data.grinders} />;
 }

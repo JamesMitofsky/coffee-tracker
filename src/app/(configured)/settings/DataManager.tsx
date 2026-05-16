@@ -1,43 +1,56 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { FolderOpen, FilePlus, Warning } from "@phosphor-icons/react";
+import { useState } from "react";
+import { FolderOpen, FilePlus, Warning, File } from "@phosphor-icons/react";
 import { useData } from "@/lib/data-context";
 
 export function DataManager() {
-  const { data, loadFromFile, startFresh } = useData();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { fileName, openFile, createFile } = useData();
   const [error, setError] = useState<string | null>(null);
   const [confirmFresh, setConfirmFresh] = useState(false);
 
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = "";
+  async function handleOpen() {
     try {
-      await loadFromFile(file);
+      await openFile();
       setError(null);
-    } catch {
-      setError("Invalid file — not a valid coffee tracker JSON.");
+      setConfirmFresh(false);
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
+      setError(err instanceof Error ? err.message : "Invalid file.");
     }
   }
 
-  function handleStartFresh() {
+  async function handleCreate() {
     if (!confirmFresh) {
       setConfirmFresh(true);
       return;
     }
-    startFresh();
-    setConfirmFresh(false);
+    try {
+      await createFile();
+      setError(null);
+      setConfirmFresh(false);
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        setConfirmFresh(false);
+        return;
+      }
+      setError("Could not create file.");
+    }
   }
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
+      {fileName && (
+        <div className="flex items-center gap-1.5 text-sm text-stone-500">
+          <File size={14} />
+          <span className="font-mono">{fileName}</span>
+        </div>
+      )}
 
+      <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          onClick={() => fileInputRef.current?.click()}
+          onClick={handleOpen}
           className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-stone-300 rounded-md hover:bg-stone-50 transition-colors text-stone-700"
         >
           <FolderOpen size={15} />
@@ -46,7 +59,7 @@ export function DataManager() {
 
         <button
           type="button"
-          onClick={handleStartFresh}
+          onClick={handleCreate}
           onBlur={() => setConfirmFresh(false)}
           className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm border rounded-md transition-colors ${confirmFresh
             ? "border-red-400 bg-red-50 text-red-700 hover:bg-red-100"
@@ -67,16 +80,8 @@ export function DataManager() {
         </button>
       </div>
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".json,application/json"
-        onChange={handleFile}
-        className="hidden"
-      />
-
       {error && (
-        <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+        <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2 whitespace-pre-wrap font-mono">
           {error}
         </p>
       )}

@@ -7,6 +7,9 @@ import { ArrowLeft, PencilSimple, CopySimple, Star } from "@phosphor-icons/react
 import { differenceInDays, parseISO } from "date-fns";
 import { useData } from "@/lib/data-context";
 import { DeleteBrewButton } from "./DeleteBrewButton";
+import { formatGrindSize } from "@/lib/grind-size";
+
+const SWEETNESS_LABELS = ["Very bitter", "Bitter-leaning", "Balanced", "Sweet-leaning", "Very sweet"];
 
 export default function BrewPage() {
   const { id } = useParams<{ id: string }>();
@@ -16,26 +19,30 @@ export default function BrewPage() {
   const brew = data.brews.find((b) => b.id === id);
   if (!brew) notFound();
 
-  const bean = data.beans.find((b) => b.id === brew.beanId);
-  const beansG = Math.round(brew.waterG / brew.brewRatio);
+  const { brewingInfo, postBrewEvaluation } = brew;
+  const bean = data.beans.find((b) => b.id === brewingInfo.beanId);
+  const beansG = Math.round(brewingInfo.waterG / brewingInfo.brewRatio);
+  const brewerMap = Object.fromEntries(data.brewers.map((b) => [b.id, b.name]));
+  const grinderMap = Object.fromEntries(data.grinders.map((g) => [g.id, g.name]));
+  const grinder = brewingInfo.grinderId ? data.grinders.find((g) => g.id === brewingInfo.grinderId) : undefined;
 
   const daysSinceRoast =
     bean?.roastDate
-      ? differenceInDays(parseISO(brew.date), parseISO(bean.roastDate))
+      ? differenceInDays(parseISO(brewingInfo.date), parseISO(bean.roastDate))
       : null;
 
   const rows: [string, string][] = [
-    ["Date", new Date(`${brew.date}T00:00:00`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })],
-    ["Brewer", brew.brewer],
-    ...(brew.grinder ? [["Grinder", brew.grinder] as [string, string]] : []),
-    ["Bean", bean?.name ?? brew.beanId],
+    ["Date", new Date(`${brewingInfo.date}T00:00:00`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })],
+    ["Brewer", brewerMap[brewingInfo.brewerId] ?? brewingInfo.brewerId],
+    ...(brewingInfo.grinderId ? [["Grinder", grinderMap[brewingInfo.grinderId] ?? brewingInfo.grinderId] as [string, string]] : []),
+    ["Bean", bean?.name ?? brewingInfo.beanId],
     ...(daysSinceRoast !== null ? [["Days from roast", `${daysSinceRoast}d`] as [string, string]] : []),
-    ["Water", `${brew.waterG} g`],
-    ["Brew ratio", `${brew.brewRatio}:1`],
+    ["Water", `${brewingInfo.waterG} g`],
+    ["Brew ratio", `${brewingInfo.brewRatio}:1`],
     ["Beans", `${beansG} g`],
-    ["Grind size", String(brew.grindSize)],
-    ["Brew time", brew.brewTimeMins ? `${brew.brewTimeMins} min` : "—"],
-    ...(brew.waterTempC ? [["Water temp", `${brew.waterTempC} °C`] as [string, string]] : []),
+    ["Grind size", formatGrindSize(brewingInfo.grindSize, grinder?.subunitsPerUnit)],
+    ["Brew time", brewingInfo.brewTimeMins ? `${brewingInfo.brewTimeMins} min` : "—"],
+    ...(brewingInfo.waterTempC ? [["Water temp", `${brewingInfo.waterTempC} °C`] as [string, string]] : []),
   ];
 
   return (
@@ -76,12 +83,12 @@ export default function BrewPage() {
             <p className="text-sm text-stone-500 mt-0.5">{bean.origin}</p>
           )}
         </div>
-        {brew.quality !== undefined && (
+        {postBrewEvaluation.quality !== undefined && (
           <div className="flex items-center gap-0.5">
-            {Array.from({ length: brew.quality }).map((_, i) => (
+            {Array.from({ length: postBrewEvaluation.quality }).map((_, i) => (
               <Star key={i} size={18} weight="fill" className="text-amber-400" />
             ))}
-            {Array.from({ length: 5 - brew.quality }).map((_, i) => (
+            {Array.from({ length: 5 - postBrewEvaluation.quality }).map((_, i) => (
               <Star key={i} size={18} className="text-stone-200" />
             ))}
           </div>
@@ -97,11 +104,11 @@ export default function BrewPage() {
         ))}
       </dl>
 
-      {brew.tasteTags.length > 0 && (
+      {postBrewEvaluation.tasteTags.length > 0 && (
         <div className="mb-6">
-          <p className="text-sm font-medium text-stone-700 mb-2">Taste</p>
+          <p className="text-sm font-medium text-stone-700 mb-2">Taste tags</p>
           <div className="flex flex-wrap gap-2">
-            {brew.tasteTags.map((tag) => (
+            {postBrewEvaluation.tasteTags.map((tag) => (
               <span key={tag} className="px-3 py-1 bg-stone-100 text-stone-700 rounded-full text-sm">
                 {tag}
               </span>
@@ -110,17 +117,38 @@ export default function BrewPage() {
         </div>
       )}
 
-      {brew.notes && (
+      {postBrewEvaluation.sweetnessLevel !== undefined && (
         <div className="mb-6">
-          <p className="text-sm font-medium text-stone-700 mb-2">Brewing details</p>
-          <p className="text-sm text-stone-600 whitespace-pre-wrap leading-relaxed">{brew.notes}</p>
+          <p className="text-sm font-medium text-stone-700 mb-2">Sweetness</p>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-stone-500 w-10 shrink-0">Bitter</span>
+            <div className="flex flex-1 gap-1">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <div
+                  key={n}
+                  className={`flex-1 h-3 rounded-full ${
+                    n <= postBrewEvaluation.sweetnessLevel! ? "bg-stone-700" : "bg-stone-200"
+                  }`}
+                />
+              ))}
+            </div>
+            <span className="text-xs text-stone-500 w-10 shrink-0 text-right">Sweet</span>
+          </div>
+          <p className="text-xs text-stone-400 mt-1.5">{SWEETNESS_LABELS[postBrewEvaluation.sweetnessLevel - 1]}</p>
         </div>
       )}
 
-      {brew.vibes && (
+      {brewingInfo.notes && (
+        <div className="mb-6">
+          <p className="text-sm font-medium text-stone-700 mb-2">Brewing details</p>
+          <p className="text-sm text-stone-600 whitespace-pre-wrap leading-relaxed">{brewingInfo.notes}</p>
+        </div>
+      )}
+
+      {postBrewEvaluation.vibes && (
         <div>
           <p className="text-sm font-medium text-stone-700 mb-2">Vibes &amp; feedback</p>
-          <p className="text-sm text-stone-600 whitespace-pre-wrap leading-relaxed">{brew.vibes}</p>
+          <p className="text-sm text-stone-600 whitespace-pre-wrap leading-relaxed">{postBrewEvaluation.vibes}</p>
         </div>
       )}
     </div>

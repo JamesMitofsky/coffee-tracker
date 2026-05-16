@@ -16,7 +16,7 @@ export default function BeansPage() {
   );
 
   const brewCountByBean = data.brews.reduce<Record<string, number>>((acc, brew) => {
-    acc[brew.beanId] = (acc[brew.beanId] ?? 0) + 1;
+    acc[brew.brewingInfo.beanId] = (acc[brew.brewingInfo.beanId] ?? 0) + 1;
     return acc;
   }, {});
 
